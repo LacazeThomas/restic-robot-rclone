@@ -29,12 +29,12 @@ Added to the repo: 169.009 KiB
 
 processed 58 files, 97.870 MiB in 0:00
 snapshot c7693989 saved`, stats{
-			filesNew:        56,
-			filesChanged:    2,
-			filesUnmodified: 2,
-			filesProcessed:  58,
-			bytesAdded:      173065216,
-			bytesProcessed:  102624133120,
+			FilesNew:        56,
+			FilesChanged:    2,
+			FilesUnmodified: 2,
+			FilesProcessed:  58,
+			BytesAdded:      173065216,
+			BytesProcessed:  102624133120,
 		}},
 	}
 	for ii, tt := range tests {
@@ -46,4 +46,35 @@ snapshot c7693989 saved`, stats{
 			assert.Equal(t, tt.wantResult, gotResult)
 		})
 	}
+}
+
+func Test_Save(t *testing.T) {
+	stats := stats{
+		FilesNew:        56,
+		FilesChanged:    2,
+		FilesUnmodified: 2,
+		FilesProcessed:  58,
+		BytesAdded:      173065216,
+		BytesProcessed:  102624133120,
+	}
+	err := stats.Save("./stats.json")
+	assert.NoError(t, err)
+	assert.FileExists(t, "./stats.json")
+
+}
+
+func Test_Load(t *testing.T) {
+	expectedStats := stats{
+		FilesNew:        56,
+		FilesChanged:    2,
+		FilesUnmodified: 2,
+		FilesProcessed:  58,
+		BytesAdded:      173065216,
+		BytesProcessed:  102624133120,
+	}
+
+	var actualStats stats
+	err := actualStats.Load("./stats.json")
+	assert.NoError(t, err)
+	assert.Equal(t, expectedStats, actualStats)
 }

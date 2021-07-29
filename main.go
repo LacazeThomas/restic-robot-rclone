@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -26,6 +28,7 @@ type backup struct {
 	PrometheusAddress  string `default:":8080"    envconfig:"PROMETHEUS_ADDRESS"`  // metrics host:port
 	PreCommand         string `                   envconfig:"PRE_COMMAND"`         // command to execute before restic is executed
 	PostCommand        string `                   envconfig:"POST_COMMAND"`        // command to execute after restic was executed (successfully)
+	StatsPath          string `                   envconfig:"STATS_PATH"`          // path to save stats
 
 	backupsTotal      prometheus.Counter
 	backupsSuccessful prometheus.Counter
@@ -47,12 +50,13 @@ var (
 )
 
 type stats struct {
-	filesNew        int
-	filesChanged    int
-	filesUnmodified int
-	filesProcessed  int
-	bytesAdded      int
-	bytesProcessed  int
+	Duration        float64
+	FilesNew        int
+	FilesChanged    int
+	FilesUnmodified int
+	FilesProcessed  int
+	BytesAdded      int
+	BytesProcessed  int
 }
 
 func main() {
@@ -68,6 +72,14 @@ func main() {
 	}
 
 	go b.startMetricsServer()
+
+	var statistics stats
+	err = statistics.Load(b.StatsPath)
+	if err != nil {
+		logger.Info("failed to load statistics, probably first time launching")
+	} else if statistics.Duration > 0 {
+		b.ObserveStats(statistics)
+	}
 
 	cr := cron.New()
 	err = cr.AddJob(b.Schedule, &b)
@@ -125,34 +137,43 @@ func (b *backup) Run() {
 		}
 	}
 
-	d := time.Since(startTime)
-
 	statistics, err := extractStats(outbuf.String())
 	if err != nil {
 		logger.Warn("failed to extract statistics from command output",
 			zap.Error(err))
 	}
-
-	logger.Info("backup completed",
-		zap.Duration("duration", d),
-		zap.Int("filesNew", statistics.filesNew),
-		zap.Int("filesChanged", statistics.filesChanged),
-		zap.Int("filesUnmodified", statistics.filesUnmodified),
-		zap.Int("filesProcessed", statistics.filesProcessed),
-		zap.Int("bytesAdded", statistics.bytesAdded),
-		zap.Int("bytesProcessed", statistics.bytesProcessed),
-	)
-
-	b.backupDuration.Observe(float64(d.Nanoseconds() * 1000))
-	b.filesNew.Observe(float64(statistics.filesNew))
-	b.filesChanged.Observe(float64(statistics.filesChanged))
-	b.filesUnmodified.Observe(float64(statistics.filesUnmodified))
-	b.filesProcessed.Observe(float64(statistics.filesProcessed))
-	b.bytesAdded.Observe(float64(statistics.bytesAdded))
-	b.bytesProcessed.Observe(float64(statistics.bytesProcessed))
+	statistics.Duration = time.Since(startTime).Seconds()
 
 	b.backupsSuccessful.Inc()
 	b.backupsTotal.Inc()
+
+	b.ObserveStats(statistics)
+
+	err = statistics.Save(b.StatsPath)
+	if err != nil {
+		logger.Error("failed to save statistics", zap.Error(err))
+	}
+}
+
+func (b *backup) ObserveStats(statistics stats) {
+
+	logger.Info("backup reading",
+		zap.Float64("duration", statistics.Duration),
+		zap.Int("filesNew", statistics.FilesNew),
+		zap.Int("filesChanged", statistics.FilesChanged),
+		zap.Int("filesUnmodified", statistics.FilesUnmodified),
+		zap.Int("filesProcessed", statistics.FilesProcessed),
+		zap.Int("bytesAdded", statistics.BytesAdded),
+		zap.Int("bytesProcessed", statistics.BytesProcessed),
+	)
+
+	b.filesNew.Observe(float64(statistics.FilesNew))
+	b.backupDuration.Observe(float64(statistics.Duration))
+	b.filesChanged.Observe(float64(statistics.FilesChanged))
+	b.filesUnmodified.Observe(float64(statistics.FilesUnmodified))
+	b.filesProcessed.Observe(float64(statistics.FilesProcessed))
+	b.bytesAdded.Observe(float64(statistics.BytesAdded))
+	b.bytesProcessed.Observe(float64(statistics.BytesProcessed))
 }
 
 func extractStats(s string) (result stats, err error) {
@@ -161,9 +182,9 @@ func extractStats(s string) (result stats, err error) {
 		err = errors.Errorf("matchFileStats expected 4, got %d", len(fileStats[0]))
 		return
 	}
-	result.filesNew, _ = strconv.Atoi(fileStats[0][1])        //nolint:errcheck
-	result.filesChanged, _ = strconv.Atoi(fileStats[0][2])    //nolint:errcheck
-	result.filesUnmodified, _ = strconv.Atoi(fileStats[0][3]) //nolint:errcheck
+	result.FilesNew, _ = strconv.Atoi(fileStats[0][1])        //nolint:errcheck
+	result.FilesChanged, _ = strconv.Atoi(fileStats[0][2])    //nolint:errcheck
+	result.FilesUnmodified, _ = strconv.Atoi(fileStats[0][3]) //nolint:errcheck
 
 	addedBytes := matchAddedBytes.FindAllStringSubmatch(s, -1)
 	if len(addedBytes[0]) != 3 {
@@ -173,17 +194,17 @@ func extractStats(s string) (result stats, err error) {
 	amount, _ := strconv.ParseFloat(addedBytes[0][1], 64) //nolint:errcheck
 	// restic doesn't use a comma to denote thousands
 	amount *= 1000
-	result.bytesAdded = convert(int(amount), addedBytes[0][2])
+	result.BytesAdded = convert(int(amount), addedBytes[0][2])
 
 	filesProcessed := matchProcessed.FindAllStringSubmatch(s, -1)
 	if len(filesProcessed[0]) != 4 {
 		err = errors.Errorf("filesProcessed expected 4, got %d", len(filesProcessed[0]))
 		return
 	}
-	result.filesProcessed, _ = strconv.Atoi(filesProcessed[0][1]) //nolint:errcheck
+	result.FilesProcessed, _ = strconv.Atoi(filesProcessed[0][1]) //nolint:errcheck
 	amount, _ = strconv.ParseFloat(filesProcessed[0][2], 64)      //nolint:errcheck
 	amount *= 1000
-	result.bytesProcessed = convert(int(amount), filesProcessed[0][3])
+	result.BytesProcessed = convert(int(amount), filesProcessed[0][3])
 
 	return
 }
@@ -218,4 +239,24 @@ func (b *backup) Ensure() (err error) {
 	}
 	logger.Info("successfully created repository")
 	return
+}
+
+func (s *stats) Save(name string) (err error) {
+	file, err := json.MarshalIndent(s, "", " ")
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(name, file, 0644)
+	return err
+}
+
+func (s *stats) Load(name string) (err error) {
+	file, err := ioutil.ReadFile(name)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal([]byte(file), &s)
+	return err
 }
