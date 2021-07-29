@@ -1,6 +1,6 @@
 # Restic Robot
 
-Backups done right... by robots!
+Backups done right... by robots with rclone and persistent stats !
 
 This is a small and simple wrapper application for [Restic](https://github.com/restic/restic/) that provides:
 
@@ -12,7 +12,7 @@ This is a small and simple wrapper application for [Restic](https://github.com/r
 
 ## Usage
 
-Just `go build` and run it, or, if you're into Docker, `southclaws/restic-robot`.
+Just `go build` and run it, or, if you're into Docker, `thomaslacaze/restic-robot-rclone`.
 
 Environment variables:
 
@@ -25,6 +25,7 @@ Environment variables:
 - `PROMETHEUS_ADDRESS`: metrics host:port
 - `PRE_COMMAND`: A shell command to run before a backup starts
 - `POST_COMMAND`: A shell command to run if the backup completes successfully
+- `STATS_PATH` : path to save stats
 
 Prometheus metrics:
 
@@ -52,20 +53,24 @@ services:
   #
 
   backup:
-    image: southclaws/restic-robot
+    image: thomaslacaze/restic-robot-rclone
     restart: always
+    hostname: ${YOUR_HOSTNAME}
     environment:
       # every day at 2am
       SCHEDULE: 0 0 2 * * *
-      RESTIC_REPOSITORY: my_service_repository
+      RESTIC_REPOSITORY: my_service_repository #example rclone:s3:Restic
       RESTIC_PASSWORD: ${MY_SERVICE_RESTIC_PASSWORD}
       # restic-robot runs `restic backup ${RESTIC_ARGS}`
       # so this is where you specify the directory and any other args.
-      RESTIC_ARGS: /data
+      RESTIC_ARGS: backup /data  --exclude="/data/go/*"
       B2_ACCOUNT_ID: ${B2_ACCOUNT_ID}
       B2_ACCOUNT_KEY: ${B2_ACCOUNT_KEY}
+      STATS_PATH: /output/stats.json
+      PROMETHEUS_ADDRESS: 0.0.0.0:9819
     volumes:
       # Bind whatever directories to the backup container.
       # You can safely bind the same directory to multiple containers.
       - "/container_data/blog/wordpress:/data/wordpress"
+      - "/data/statistic:/output"
 ```
