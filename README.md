@@ -1,6 +1,6 @@
 # Restic Robot
 
-Backups done right... by robots with rclone and persistent stats !
+Backups done right... by robots with rclone !
 
 This is a small and simple wrapper application for [Restic](https://github.com/restic/restic/) that provides:
 
@@ -25,7 +25,6 @@ Environment variables:
 - `PROMETHEUS_ADDRESS`: metrics host:port
 - `PRE_COMMAND`: A shell command to run before a backup starts
 - `POST_COMMAND`: A shell command to run if the backup completes successfully
-- `STATS_PATH` : path to save stats
 
 Prometheus metrics:
 
@@ -66,11 +65,9 @@ services:
       RESTIC_ARGS: backup /data  --exclude="/data/go/*"
       B2_ACCOUNT_ID: ${B2_ACCOUNT_ID}
       B2_ACCOUNT_KEY: ${B2_ACCOUNT_KEY}
-      STATS_PATH: /output/stats.json
       PROMETHEUS_ADDRESS: 0.0.0.0:9819
     volumes:
       # Bind whatever directories to the backup container.
       # You can safely bind the same directory to multiple containers.
       - "/container_data/blog/wordpress:/data/wordpress"
-      - "/data/statistic:/output"
 ```

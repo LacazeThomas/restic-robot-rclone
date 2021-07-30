@@ -1,6 +1,6 @@
 FROM golang:alpine AS builder
 
-WORKDIR /restic-robot
+WORKDIR /restic-robot-rclone
 ADD . .
 ENV GO111MODULE=on
 RUN apk add git
@@ -17,6 +17,6 @@ RUN apk add --no-cache curl && curl -O https://downloads.rclone.org/rclone-curre
 FROM restic/restic AS runner
 
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
-COPY --from=builder /restic-robot/restic-robot /usr/bin/restic-robot
+COPY --from=builder /restic-robot-rclone/restic-robot-rclone /usr/bin/restic-robot-rclone
 
-ENTRYPOINT ["restic-robot"]
+ENTRYPOINT ["restic-robot-rclone"]
