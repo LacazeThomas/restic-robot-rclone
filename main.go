@@ -2,8 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
-	"io/ioutil"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -14,6 +12,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/robfig/cron"
 	"go.uber.org/zap"
 )
@@ -28,7 +27,6 @@ type backup struct {
 	PrometheusAddress  string `default:":8080"    envconfig:"PROMETHEUS_ADDRESS"`  // metrics host:port
 	PreCommand         string `                   envconfig:"PRE_COMMAND"`         // command to execute before restic is executed
 	PostCommand        string `                   envconfig:"POST_COMMAND"`        // command to execute after restic was executed (successfully)
-	StatsPath          string `                   envconfig:"STATS_PATH"`          // path to save stats
 
 	backupsTotal      prometheus.Counter
 	backupsSuccessful prometheus.Counter
@@ -72,14 +70,6 @@ func main() {
 	}
 
 	go b.startMetricsServer()
-
-	var statistics stats
-	err = statistics.Load(b.StatsPath)
-	if err != nil {
-		logger.Info("failed to load statistics, probably first time launching")
-	} else if statistics.Duration > 0 {
-		b.ObserveStats(statistics)
-	}
 
 	cr := cron.New()
 	err = cr.AddJob(b.Schedule, &b)
@@ -148,11 +138,6 @@ func (b *backup) Run() {
 	b.backupsTotal.Inc()
 
 	b.ObserveStats(statistics)
-
-	err = statistics.Save(b.StatsPath)
-	if err != nil {
-		logger.Error("failed to save statistics", zap.Error(err))
-	}
 }
 
 func (b *backup) ObserveStats(statistics stats) {
@@ -239,24 +224,4 @@ func (b *backup) Ensure() (err error) {
 	}
 	logger.Info("successfully created repository")
 	return
-}
-
-func (s *stats) Save(name string) (err error) {
-	file, err := json.MarshalIndent(s, "", " ")
-	if err != nil {
-		return err
-	}
-
-	err = ioutil.WriteFile(name, file, 0644)
-	return err
-}
-
-func (s *stats) Load(name string) (err error) {
-	file, err := ioutil.ReadFile(name)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal([]byte(file), &s)
-	return err
 }

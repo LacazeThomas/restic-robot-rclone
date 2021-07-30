@@ -47,34 +47,3 @@ snapshot c7693989 saved`, stats{
 		})
 	}
 }
-
-func Test_Save(t *testing.T) {
-	stats := stats{
-		FilesNew:        56,
-		FilesChanged:    2,
-		FilesUnmodified: 2,
-		FilesProcessed:  58,
-		BytesAdded:      173065216,
-		BytesProcessed:  102624133120,
-	}
-	err := stats.Save("./stats.json")
-	assert.NoError(t, err)
-	assert.FileExists(t, "./stats.json")
-
-}
-
-func Test_Load(t *testing.T) {
-	expectedStats := stats{
-		FilesNew:        56,
-		FilesChanged:    2,
-		FilesUnmodified: 2,
-		FilesProcessed:  58,
-		BytesAdded:      173065216,
-		BytesProcessed:  102624133120,
-	}
-
-	var actualStats stats
-	err := actualStats.Load("./stats.json")
-	assert.NoError(t, err)
-	assert.Equal(t, expectedStats, actualStats)
-}
