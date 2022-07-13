@@ -25,6 +25,7 @@ Environment variables:
 - `PROMETHEUS_ADDRESS`: metrics host:port
 - `PRE_COMMAND`: A shell command to run before a backup starts
 - `POST_COMMAND`: A shell command to run if the backup completes successfully
+- `RCLONE_ARGS` : additional args for rclone
 
 Prometheus metrics:
 
@@ -60,6 +61,7 @@ services:
       SCHEDULE: 0 0 2 * * *
       RESTIC_REPOSITORY: my_service_repository #example rclone:s3:Restic
       RESTIC_PASSWORD: ${MY_SERVICE_RESTIC_PASSWORD}
+      RCLONE_ARGS: rclone.args=serve restic --stdio --tpslimit=10 --drive-chunk-size=256M --drive-use-trash=false --fast-list
       # restic-robot runs `restic backup ${RESTIC_ARGS}`
       # so this is where you specify the directory and any other args.
       RESTIC_ARGS: backup /data  --exclude="/data/go/*"

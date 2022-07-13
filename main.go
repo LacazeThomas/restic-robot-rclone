@@ -27,6 +27,7 @@ type backup struct {
 	PrometheusAddress  string `default:":8080"    envconfig:"PROMETHEUS_ADDRESS"`  // metrics host:port
 	PreCommand         string `                   envconfig:"PRE_COMMAND"`         // command to execute before restic is executed
 	PostCommand        string `                   envconfig:"POST_COMMAND"`        // command to execute after restic was executed (successfully)
+	RcloneArgs         string `                   envconfig:"RCLONE_ARGS"`         // additional args for rclone command
 
 	backupsTotal      prometheus.Counter
 	backupsSuccessful prometheus.Counter
@@ -99,9 +100,15 @@ func (b *backup) Run() {
 	}
 
 	args := []string{"backup"}
+	if len(b.RcloneArgs) > 0 {
+		args = append(args, "-o")
+		args = append(args, b.RcloneArgs)
+	}
 	args = append(args, strings.Split(b.Args, " ")...)
 
 	cmd := exec.Command("restic", args...)
+	logger.Info("Launching backup command: " + cmd.String())
+
 	errbuf := bytes.NewBuffer(nil)
 	outbuf := bytes.NewBuffer(nil)
 	cmd.Stderr = errbuf
